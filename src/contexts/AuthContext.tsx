@@ -1,3 +1,4 @@
+// contexts/AuthContext.tsx - Actualizado
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth } from '../lib/api';
 
@@ -5,6 +6,7 @@ interface User {
   id: string;
   email: string;
   fullName: string;
+  role: 'customer' | 'employee';
 }
 
 interface AuthContextType {

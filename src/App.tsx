@@ -7,6 +7,7 @@ import { Dashboard } from './components/dashboard/Dashboard';
 import { ProductList } from './components/products/ProductList';
 import { SalesList } from './components/sales/SalesList';
 import { AlertsList } from './components/alerts/AlertsList';
+import { EcommerceApp } from './components/ecommerce/EcommerceApp';
 import { initCategories } from './lib/api';
 
 function AuthScreen() {
@@ -28,7 +29,6 @@ function MainApp() {
   const [activeView, setActiveView] = useState('dashboard');
 
   useEffect(() => {
-    // Initialize categories on first load
     if (user) {
       initCategories();
     }
@@ -49,6 +49,12 @@ function MainApp() {
     return <AuthScreen />;
   }
 
+  // Redirigir según el rol del usuario
+  if (user.role === 'customer') {
+    return <EcommerceApp />;
+  }
+
+  // Personal/empleado ve el dashboard existente
   return (
     <div className="flex min-h-screen bg-gray-100">
       <Sidebar
