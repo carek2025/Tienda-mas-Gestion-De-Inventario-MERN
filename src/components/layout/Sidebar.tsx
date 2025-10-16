@@ -1,4 +1,6 @@
-import { BarChart3, Package, ShoppingCart, AlertTriangle, LogOut } from 'lucide-react';
+// src/components/layout/Sidebar.tsx (updated with back to store button)
+import { BarChart3, Package, ShoppingCart, AlertTriangle, LogOut, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface SidebarProps {
   activeView: string;
@@ -41,6 +43,14 @@ export function Sidebar({ activeView, onViewChange, onLogout }: SidebarProps) {
           );
         })}
       </nav>
+
+      <Link
+        to="/"
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+      >
+        <ArrowLeft className="w-5 h-5" />
+        <span className="font-medium">Volver a la Tienda</span>
+      </Link>
 
       <button
         onClick={onLogout}

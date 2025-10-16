@@ -1,3 +1,4 @@
+// src/lib/api.ts (updated with new endpoints for store)
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -30,9 +31,9 @@ export const auth = {
     }
   },
 
-  signUp: async (email: string, password: string, fullName: string) => {
+  signUp: async (email: string, password: string, fullName: string, role: string) => {
     try {
-      const { data } = await api.post('/auth/register', { email, password, fullName });
+      const { data } = await api.post('/auth/register', { email, password, fullName, role });
       localStorage.setItem('token', data.token);
       return { data, error: null };
     } catch (error: any) {
@@ -54,16 +55,13 @@ export const auth = {
     }
   },
 
-  onAuthStateChange: (callback: (user: any) => void) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      auth.getUser().then(({ data }) => {
-        callback(data);
-      });
-    } else {
-      callback(null);
+  updateUser: async (userData: any) => {
+    try {
+      const { data } = await api.put('/auth/me', userData);
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al actualizar perfil' };
     }
-    return { unsubscribe: () => {} };
   },
 };
 
@@ -77,15 +75,6 @@ export const categories = {
       return { data: null, error: 'Error al obtener categorías' };
     }
   },
-
-  create: async (category: any) => {
-    try {
-      const { data } = await api.post('/categories', category);
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: 'Error al crear categoría' };
-    }
-  },
 };
 
 // Products
@@ -96,6 +85,15 @@ export const products = {
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Error al obtener productos' };
+    }
+  },
+
+  getOne: async (id: string) => {
+    try {
+      const { data } = await api.get(`/products/${id}`);
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al obtener producto' };
     }
   },
 
@@ -177,6 +175,126 @@ export const dashboard = {
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Error al obtener estadísticas' };
+    }
+  },
+};
+
+// Favorites
+export const favorites = {
+  getAll: async () => {
+    try {
+      const { data } = await api.get('/favorites');
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al obtener favoritos' };
+    }
+  },
+
+  add: async (productId: string) => {
+    try {
+      const { data } = await api.post('/favorites', { productId });
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al añadir favorito' };
+    }
+  },
+
+  remove: async (productId: string) => {
+    try {
+      await api.delete(`/favorites/${productId}`);
+      return { error: null };
+    } catch (error) {
+      return { error: 'Error al remover favorito' };
+    }
+  },
+};
+
+// Cart
+export const cart = {
+  get: async () => {
+    try {
+      const { data } = await api.get('/cart');
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al obtener carrito' };
+    }
+  },
+
+  add: async (productId: string, quantity: number) => {
+    try {
+      const { data } = await api.post('/cart', { productId, quantity });
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al añadir al carrito' };
+    }
+  },
+
+  update: async (productId: string, quantity: number) => {
+    try {
+      const { data } = await api.put('/cart', { productId, quantity });
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al actualizar carrito' };
+    }
+  },
+
+  remove: async (productId: string) => {
+    try {
+      await api.delete(`/cart/${productId}`);
+      return { error: null };
+    } catch (error) {
+      return { error: 'Error al remover del carrito' };
+    }
+  },
+
+  clear: async () => {
+    try {
+      await api.delete('/cart');
+      return { error: null };
+    } catch (error) {
+      return { error: 'Error al vaciar carrito' };
+    }
+  },
+};
+
+// Orders
+export const orders = {
+  getAll: async () => {
+    try {
+      const { data } = await api.get('/orders');
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al obtener órdenes' };
+    }
+  },
+
+  create: async (orderData: any) => {
+    try {
+      const { data } = await api.post('/orders', orderData);
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al crear orden' };
+    }
+  },
+};
+
+// Reviews
+export const reviews = {
+  getForProduct: async (productId: string) => {
+    try {
+      const { data } = await api.get(`/reviews/product/${productId}`);
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al obtener reseñas' };
+    }
+  },
+
+  create: async (productId: string, review: any) => {
+    try {
+      const { data } = await api.post('/reviews', { productId, ...review });
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: 'Error al crear reseña' };
     }
   },
 };

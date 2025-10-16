@@ -1,8 +1,10 @@
+// src/components/auth/LoginForm.tsx (updated)
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LogIn } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-export function LoginForm({ onToggle }: { onToggle: () => void }) {
+export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export function LoginForm({ onToggle }: { onToggle: () => void }) {
     const { error } = await signIn(email, password);
 
     if (error) {
-      setError('Credenciales inválidas. Por favor, intente nuevamente.');
+      setError(error);
     }
 
     setLoading(false);
@@ -76,13 +78,7 @@ export function LoginForm({ onToggle }: { onToggle: () => void }) {
 
       <div className="mt-6 text-center">
         <p className="text-sm text-gray-600">
-          ¿No tienes cuenta?{' '}
-          <button
-            onClick={onToggle}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Regístrate
-          </button>
+          ¿No tienes cuenta? <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">Regístrate</Link>
         </p>
       </div>
     </div>

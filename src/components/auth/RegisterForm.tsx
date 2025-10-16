@@ -1,11 +1,14 @@
+// src/components/auth/RegisterForm.tsx (updated with role select)
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-export function RegisterForm({ onToggle }: { onToggle: () => void }) {
+export function RegisterForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<'customer' | 'staff'>('customer');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
@@ -21,10 +24,10 @@ export function RegisterForm({ onToggle }: { onToggle: () => void }) {
       return;
     }
 
-    const { error } = await signUp(email, password, fullName);
+    const { error } = await signUp(email, password, fullName, role);
 
     if (error) {
-      setError('Error al crear la cuenta. El correo puede estar en uso.');
+      setError(error);
     }
 
     setLoading(false);
@@ -87,6 +90,20 @@ export function RegisterForm({ onToggle }: { onToggle: () => void }) {
           <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tipo de Usuario
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'customer' | 'staff')}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          >
+            <option value="customer">Cliente</option>
+            <option value="staff">Personal</option>
+          </select>
+        </div>
+
         <button
           type="submit"
           disabled={loading}
@@ -98,13 +115,7 @@ export function RegisterForm({ onToggle }: { onToggle: () => void }) {
 
       <div className="mt-6 text-center">
         <p className="text-sm text-gray-600">
-          ¿Ya tienes cuenta?{' '}
-          <button
-            onClick={onToggle}
-            className="text-green-600 hover:text-green-700 font-medium"
-          >
-            Inicia sesión
-          </button>
+          ¿Ya tienes cuenta? <Link to="/login" className="text-green-600 hover:text-green-700 font-medium">Inicia sesión</Link>
         </p>
       </div>
     </div>
