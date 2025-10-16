@@ -1,7 +1,9 @@
+// src/components/dashboard/SalesForm.tsx
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Search } from 'lucide-react';
+import { X, Trash2, Search } from 'lucide-react';
 import { products, sales } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-toastify';
 
 interface Product {
   _id: string;
@@ -67,6 +69,8 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
               : item
           )
         );
+      } else {
+        toast.warn(`No hay más stock disponible para ${product.name}`);
       }
     } else {
       setSaleItems([
@@ -79,7 +83,11 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
 
   const updateQuantity = (productId: string, quantity: number) => {
     const item = saleItems.find((item) => item.product._id === productId);
-    if (item && quantity <= item.product.stock && quantity > 0) {
+    if (item && quantity > 0) {
+      if (quantity > item.product.stock) {
+        toast.warn(`La cantidad no puede exceder el stock disponible (${item.product.stock})`);
+        return;
+      }
       setSaleItems(
         saleItems.map((item) =>
           item.product._id === productId
@@ -102,13 +110,16 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saleItems.length === 0) return;
+    if (saleItems.length === 0) {
+      toast.error('Debe agregar al menos un producto a la venta');
+      return;
+    }
 
     setLoading(true);
 
     try {
       const saleData = {
-        customerName,
+        customerName: customerName || 'Cliente Varios',
         customerDocument,
         paymentMethod,
         items: saleItems.map((item) => ({
@@ -117,14 +128,22 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
           unitPrice: item.product.price,
           subtotal: item.subtotal,
         })),
+        totalAmount,
+        sellerId: user?.id,
       };
 
-      await sales.create(saleData);
-      onSave();
-      onClose();
+      const { error } = await sales.create(saleData);
+
+      if (error) {
+        toast.error('Error al registrar la venta');
+      } else {
+        toast.success('Venta registrada con éxito');
+        onSave();
+        onClose();
+      }
     } catch (error) {
       console.error('Error creating sale:', error);
-      alert('Error al registrar la venta');
+      toast.error('Error al registrar la venta');
     } finally {
       setLoading(false);
     }
@@ -132,8 +151,8 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b bg-white">
           <h2 className="text-2xl font-bold text-gray-800">Nueva Venta</h2>
           <button
             onClick={onClose}
@@ -143,7 +162,7 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -293,19 +312,18 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
               </div>
             )}
           </div>
+        </form>
 
+        <div className="p-6 border-t mt-auto bg-white">
           {saleItems.length > 0 && (
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xl font-bold text-gray-800">Total:</span>
-                <span className="text-3xl font-bold text-green-600">
-                  S/ {totalAmount.toFixed(2)}
-                </span>
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-xl font-bold text-gray-800">Total:</span>
+              <span className="text-3xl font-bold text-green-600">
+                S/ {totalAmount.toFixed(2)}
+              </span>
             </div>
           )}
-
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -315,13 +333,14 @@ export function SalesForm({ onClose, onSave }: SalesFormProps) {
             </button>
             <button
               type="submit"
+              onClick={handleSubmit}
               disabled={loading || saleItems.length === 0}
               className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Registrando...' : 'Registrar Venta'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

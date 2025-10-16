@@ -257,23 +257,42 @@ export const cart = {
   },
 };
 
-// Orders
+// Orders - CORREGIDO
 export const orders = {
   getAll: async () => {
     try {
       const { data } = await api.get('/orders');
       return { data, error: null };
-    } catch (error) {
-      return { data: null, error: 'Error al obtener órdenes' };
+    } catch (error: any) {
+      return { data: null, error: error.response?.data?.error || 'Error al obtener órdenes' };
     }
   },
 
   create: async (orderData: any) => {
     try {
-      const { data } = await api.post('/orders', orderData);
+      // Asegurar que los datos tengan la estructura correcta
+      const formattedData = {
+        items: orderData.items.map((item: any) => ({
+          productId: item.productId || item.product?._id,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || item.price || item.product?.price,
+          subtotal: item.subtotal || (item.quantity * (item.unitPrice || item.price || item.product?.price))
+        })),
+        address: orderData.address,
+        paymentMethod: orderData.paymentMethod,
+        totalAmount: orderData.totalAmount
+      };
+
+      console.log('Enviando orden:', formattedData); // Para debug
+
+      const { data } = await api.post('/orders', formattedData);
       return { data, error: null };
-    } catch (error) {
-      return { data: null, error: 'Error al crear orden' };
+    } catch (error: any) {
+      console.error('Error en create order:', error.response?.data);
+      return { 
+        data: null, 
+        error: error.response?.data?.error || 'Error al crear orden' 
+      };
     }
   },
 };

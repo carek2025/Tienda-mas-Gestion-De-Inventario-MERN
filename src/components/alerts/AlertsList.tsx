@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { alerts } from '../../lib/api';
+import { toast } from 'react-toastify';
 
 interface Alert {
   _id: string;
@@ -28,14 +29,31 @@ export function AlertsList() {
 
   const loadAlerts = async () => {
     setLoading(true);
-    const { data } = await alerts.getAll(filter);
-    if (data) setAlertsList(data);
-    setLoading(false);
+    try {
+      const { data, error } = await alerts.getAll(filter);
+      if (error) {
+        toast.error('Error al cargar las alertas');
+        setAlertsList([]);
+      } else {
+        setAlertsList(data || []);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resolveAlert = async (id: string) => {
-    await alerts.resolve(id);
-    loadAlerts();
+    try {
+      const { error } = await alerts.resolve(id);
+      if (error) {
+        toast.error('Error al resolver la alerta');
+      } else {
+        toast.success('Alerta marcada como resuelta');
+        loadAlerts();
+      }
+    } catch {
+      toast.error('Error inesperado al resolver la alerta');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -67,36 +85,21 @@ export function AlertsList() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'all'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Todas
-          </button>
-          <button
-            onClick={() => setFilter('active')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'active'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Activas
-          </button>
-          <button
-            onClick={() => setFilter('resolved')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'resolved'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Resueltas
-          </button>
+          {(['all', 'active', 'resolved'] as const).map((filterOption) => (
+            <button
+              key={filterOption}
+              onClick={() => setFilter(filterOption)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                filter === filterOption
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {filterOption === 'all' && 'Todas'}
+              {filterOption === 'active' && 'Activas'}
+              {filterOption === 'resolved' && 'Resueltas'}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -111,9 +114,7 @@ export function AlertsList() {
             <div
               key={alert._id}
               className={`bg-white rounded-lg shadow-md p-6 border-l-4 ${
-                alert.isResolved
-                  ? 'border-green-500'
-                  : 'border-orange-500'
+                alert.isResolved ? 'border-green-500' : 'border-orange-500'
               }`}
             >
               <div className="flex items-start justify-between">

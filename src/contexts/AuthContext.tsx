@@ -1,7 +1,8 @@
-// src/contexts/AuthContext.tsx (updated with role)
+// src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 interface User {
   id: string;
@@ -31,8 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      auth.getUser().then(({ data }) => {
-        setUser(data);
+      auth.getUser().then(({ data, error }) => {
+        if (data) {
+          setUser(data);
+        } else {
+          // Token is invalid, clear it
+          localStorage.removeItem('token');
+        }
         setLoading(false);
       });
     } else {
@@ -44,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await auth.signIn(email, password);
     if (!error && data) {
       setUser(data.user);
+      toast.success(`¡Bienvenido de vuelta, ${data.user.fullName}!`);
       if (data.user.role === 'staff') {
         navigate('/dashboard');
       } else {
@@ -57,7 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await auth.signUp(email, password, fullName, role);
     if (!error && data) {
       setUser(data.user);
-      if (data.user.role === 'staff') {
+      toast.success(`¡Bienvenido a TechStore, ${data.user.fullName}!`);
+       if (data.user.role === 'staff') {
         navigate('/dashboard');
       } else {
         navigate('/');
@@ -70,19 +78,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await auth.signOut();
     setUser(null);
     navigate('/');
+    // We already show a toast in Header, no need for another here
   };
 
   const updateProfile = async (data: Partial<User>) => {
     const { data: updated, error } = await auth.updateUser(data);
     if (!error && updated) {
-      setUser(updated);
+      setUser(prevUser => prevUser ? { ...prevUser, ...updated } : null);
     }
     return { error };
   };
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateProfile }}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

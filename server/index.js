@@ -19,7 +19,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/techstore
   .then(() => console.log('✅ MongoDB conectado exitosamente'))
   .catch(err => console.error('❌ Error conectando a MongoDB:', err));
 
-// Schemas (existing + new)
+// Schemas
 const categorySchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   description: { type: String, default: '' },
@@ -105,7 +105,7 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true, min: 0 },
   address: { type: String, required: true },
   paymentMethod: { type: String, required: true },
-  status: { type: String, default: 'pending' },
+  status: { type: String, default: 'completed' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -309,7 +309,7 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
 // SALES ROUTES
 app.get('/api/sales', authMiddleware, async (req, res) => {
   try {
-    const sales = await Sale.find().sort({ createdAt: -1 });
+    const sales = await Sale.find().populate('userId', 'fullName').sort({ createdAt: -1 });
     res.json(sales);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener ventas' });
@@ -356,23 +356,25 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       
       // Update product stock
       const product = await Product.findById(item.productId);
-      product.stock -= item.quantity;
-      await product.save();
-      
-      // Check if stock is low
-      if (product.stock <= product.minStock) {
-        const existingAlert = await InventoryAlert.findOne({
-          productId: product._id,
-          isResolved: false
-        });
+      if (product) {
+        product.stock -= item.quantity;
+        await product.save();
         
-        if (!existingAlert) {
-          const alert = new InventoryAlert({
+        // Check if stock is low
+        if (product.stock <= product.minStock) {
+          const existingAlert = await InventoryAlert.findOne({
             productId: product._id,
-            alertType: 'low_stock',
-            message: `El producto "${product.name}" tiene stock bajo (${product.stock} unidades). Stock mínimo: ${product.minStock}`
+            isResolved: false
           });
-          await alert.save();
+          
+          if (!existingAlert) {
+            const alert = new InventoryAlert({
+              productId: product._id,
+              alertType: 'low_stock',
+              message: `El producto "${product.name}" tiene stock bajo (${product.stock} unidades). Stock mínimo: ${product.minStock}`
+            });
+            await alert.save();
+          }
         }
       }
     }
@@ -418,32 +420,87 @@ app.put('/api/alerts/:id/resolve', authMiddleware, async (req, res) => {
   }
 });
 
-// DASHBOARD ROUTES
+// DASHBOARD ROUTES - ACTUALIZADO CON ÓRDENES
 app.get('/api/dashboard/stats', authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Productos e inventario
     const totalProducts = await Product.countDocuments();
     const products = await Product.find();
     const lowStockProducts = products.filter(p => p.stock <= p.minStock).length;
-    
-    const todaySales = await Sale.find({ createdAt: { $gte: today } });
-    const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    
-    const activeAlerts = await InventoryAlert.countDocuments({ isResolved: false });
-    
     const totalInventoryValue = products.reduce((sum, p) => sum + (p.stock * p.cost), 0);
-    
+
+    // Ventas físicas de hoy
+    const todayPhysicalSales = await Sale.find({ 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    });
+    const todayPhysicalRevenue = todayPhysicalSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+
+    // Ventas online de hoy (órdenes)
+    const todayOnlineOrders = await Order.find({ 
+      createdAt: { $gte: today, $lt: tomorrow } 
+    });
+    const todayOnlineRevenue = todayOnlineOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+
+    // Combinar ventas físicas y online
+    const todayTotalSales = todayPhysicalSales.length + todayOnlineOrders.length;
+    const todayTotalRevenue = todayPhysicalRevenue + todayOnlineRevenue;
+
+    // Alertas activas
+    const activeAlerts = await InventoryAlert.countDocuments({ isResolved: false });
+
+    // Datos para gráficos (últimos 7 días)
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      // Ventas físicas del día
+      const dayPhysicalSales = await Sale.find({
+        createdAt: { $gte: date, $lt: nextDay }
+      });
+      const dayPhysicalRevenue = dayPhysicalSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+
+      // Ventas online del día
+      const dayOnlineOrders = await Order.find({
+        createdAt: { $gte: date, $lt: nextDay }
+      });
+      const dayOnlineRevenue = dayOnlineOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+
+      last7Days.push({
+        date: date.toISOString().slice(5, 10), // MM-DD
+        revenue: dayPhysicalRevenue + dayOnlineRevenue,
+        physicalRevenue: dayPhysicalRevenue,
+        onlineRevenue: dayOnlineRevenue,
+        physicalSales: dayPhysicalSales.length,
+        onlineSales: dayOnlineOrders.length,
+        totalSales: dayPhysicalSales.length + dayOnlineOrders.length
+      });
+    }
+
     res.json({
       totalProducts,
       lowStockProducts,
-      todaySales: todaySales.length,
-      todayRevenue,
+      todaySales: todayTotalSales,
+      todayRevenue: todayTotalRevenue,
+      todayPhysicalSales: todayPhysicalSales.length,
+      todayOnlineSales: todayOnlineOrders.length,
+      todayPhysicalRevenue,
+      todayOnlineRevenue,
       activeAlerts,
-      totalInventoryValue
+      totalInventoryValue,
+      salesData: last7Days
     });
   } catch (error) {
+    console.error('Error en dashboard stats:', error);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 });
@@ -512,12 +569,27 @@ app.delete('/api/favorites/:productId', authMiddleware, async (req, res) => {
   }
 });
 
-// CART ROUTES
+// CART ROUTES - ACTUALIZADO CON CÁLCULO DE TOTAL
 app.get('/api/cart', authMiddleware, async (req, res) => {
   try {
     let userCart = await Cart.findOne({ userId: req.userId }).populate('items.productId');
     if (!userCart) userCart = new Cart({ userId: req.userId, items: [] });
-    res.json({ items: userCart.items.map(item => ({ product: item.productId, quantity: item.quantity })) });
+    
+    // Calcular el total del carrito
+    const totalAmount = userCart.items.reduce((total, item) => {
+      if (item.productId && item.productId.price) {
+        return total + (item.productId.price * item.quantity);
+      }
+      return total;
+    }, 0);
+    
+    res.json({ 
+      items: userCart.items.map(item => ({ 
+        product: item.productId, 
+        quantity: item.quantity 
+      })),
+      totalAmount 
+    });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener carrito' });
   }
@@ -528,6 +600,7 @@ app.post('/api/cart', authMiddleware, async (req, res) => {
     const { productId, quantity } = req.body;
     let userCart = await Cart.findOne({ userId: req.userId });
     if (!userCart) userCart = new Cart({ userId: req.userId, items: [] });
+    
     const existingItem = userCart.items.find(item => item.productId.toString() === productId);
     if (existingItem) {
       existingItem.quantity += quantity;
@@ -535,7 +608,23 @@ app.post('/api/cart', authMiddleware, async (req, res) => {
       userCart.items.push({ productId, quantity });
     }
     await userCart.save();
-    res.json(userCart);
+    
+    // Re-popular y calcular total
+    await userCart.populate('items.productId');
+    const totalAmount = userCart.items.reduce((total, item) => {
+      if (item.productId && item.productId.price) {
+        return total + (item.productId.price * item.quantity);
+      }
+      return total;
+    }, 0);
+    
+    res.json({ 
+      items: userCart.items.map(item => ({ 
+        product: item.productId, 
+        quantity: item.quantity 
+      })),
+      totalAmount 
+    });
   } catch (error) {
     res.status(500).json({ error: 'Error al añadir al carrito' });
   }
@@ -550,6 +639,24 @@ app.put('/api/cart', authMiddleware, async (req, res) => {
       if (item) {
         item.quantity = quantity;
         await userCart.save();
+        
+        // Re-popular y calcular total
+        await userCart.populate('items.productId');
+        const totalAmount = userCart.items.reduce((total, item) => {
+          if (item.productId && item.productId.price) {
+            return total + (item.productId.price * item.quantity);
+          }
+          return total;
+        }, 0);
+        
+        res.json({ 
+          items: userCart.items.map(item => ({ 
+            product: item.productId, 
+            quantity: item.quantity 
+          })),
+          totalAmount 
+        });
+        return;
       }
     }
     res.json(userCart);
@@ -564,6 +671,24 @@ app.delete('/api/cart/:productId', authMiddleware, async (req, res) => {
     if (userCart) {
       userCart.items = userCart.items.filter(item => item.productId.toString() !== req.params.productId);
       await userCart.save();
+      
+      // Re-popular y calcular total
+      await userCart.populate('items.productId');
+      const totalAmount = userCart.items.reduce((total, item) => {
+        if (item.productId && item.productId.price) {
+          return total + (item.productId.price * item.quantity);
+        }
+        return total;
+      }, 0);
+      
+      res.json({ 
+        items: userCart.items.map(item => ({ 
+          product: item.productId, 
+          quantity: item.quantity 
+        })),
+        totalAmount 
+      });
+      return;
     }
     res.json({ message: 'Item removido' });
   } catch (error) {
@@ -578,18 +703,44 @@ app.delete('/api/cart', authMiddleware, async (req, res) => {
       userCart.items = [];
       await userCart.save();
     }
-    res.json({ message: 'Carrito vaciado' });
+    res.json({ 
+      items: [],
+      totalAmount: 0 
+    });
   } catch (error) {
     res.status(500).json({ error: 'Error al vaciar carrito' });
   }
 });
 
-// ORDERS ROUTES
+// ORDERS ROUTES - COMPLETAMENTE ACTUALIZADO
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
-    const userOrders = await Order.find({ userId: req.userId }).populate('items.productId').sort({ createdAt: -1 });
+    const userOrders = await Order.find({ userId: req.userId })
+      .populate('items.productId')
+      .populate('userId', 'fullName email')
+      .sort({ createdAt: -1 });
     res.json(userOrders);
   } catch (error) {
+    console.error('Error al obtener órdenes:', error);
+    res.status(500).json({ error: 'Error al obtener órdenes' });
+  }
+});
+
+// Obtener todas las órdenes (para administradores)
+app.get('/api/orders/all', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'staff') {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    const orders = await Order.find()
+      .populate('items.productId')
+      .populate('userId', 'fullName email')
+      .sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    console.error('Error al obtener todas las órdenes:', error);
     res.status(500).json({ error: 'Error al obtener órdenes' });
   }
 });
@@ -598,53 +749,141 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
     const { items, address, paymentMethod, totalAmount } = req.body;
     
+    console.log('Datos recibidos para crear orden:', { items, address, paymentMethod, totalAmount });
+    
+    // Validar que tenemos los datos necesarios
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No hay items en la orden' });
+    }
+    if (!address || !paymentMethod || totalAmount === undefined) {
+      return res.status(400).json({ error: 'Faltan datos requeridos: address, paymentMethod, totalAmount' });
+    }
+
+    // Validar stock antes de procesar
+    for (const item of items) {
+      if (!item.productId) {
+        return res.status(400).json({ error: 'Product ID es requerido para cada item' });
+      }
+      
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(404).json({ error: `Producto no encontrado: ${item.productId}` });
+      }
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ 
+          error: `Stock insuficiente para ${product.name}. Disponible: ${product.stock}, Solicitado: ${item.quantity}` 
+        });
+      }
+    }
+    
     // Generate order number
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const count = await Order.countDocuments({ createdAt: { $gte: today } });
     const orderNumber = `O-${today.toISOString().slice(0, 10).replace(/-/g, '')}-${String(count + 1).padStart(4, '0')}`;
     
+    // Crear la orden con la estructura correcta
+    const orderItems = items.map(item => {
+      const unitPrice = item.unitPrice || item.price || 0;
+      const quantity = item.quantity || 1;
+      const subtotal = item.subtotal || (quantity * unitPrice);
+      
+      return {
+        productId: item.productId,
+        quantity: quantity,
+        unitPrice: unitPrice,
+        subtotal: subtotal
+      };
+    });
+
     const order = new Order({
       orderNumber,
       userId: req.userId,
-      items,
+      items: orderItems,
       totalAmount,
       address,
       paymentMethod,
-      status: 'completed' // simulated
+      status: 'completed'
     });
+    
     await order.save();
     
-    // Update stock
+    console.log('Orden creada:', order._id);
+    
+    // Actualizar stock después de crear la orden
     for (const item of items) {
       const product = await Product.findById(item.productId);
-      product.stock -= item.quantity;
-      await product.save();
-      
-      if (product.stock <= product.minStock) {
-        // create alert if needed
-        const existingAlert = await InventoryAlert.findOne({ productId: product._id, isResolved: false });
-        if (!existingAlert) {
-          const alert = new InventoryAlert({
-            productId: product._id,
-            alertType: 'low_stock',
-            message: `Stock bajo para ${product.name} después de orden`
+      if (product) {
+        const oldStock = product.stock;
+        product.stock -= item.quantity;
+        await product.save();
+        
+        console.log(`Stock actualizado para ${product.name}: ${oldStock} -> ${product.stock}`);
+        
+        // Verificar alertas de stock bajo
+        if (product.stock <= product.minStock) {
+          const existingAlert = await InventoryAlert.findOne({ 
+            productId: product._id, 
+            isResolved: false 
           });
-          await alert.save();
+          
+          if (!existingAlert) {
+            const alert = new InventoryAlert({
+              productId: product._id,
+              alertType: 'low_stock',
+              message: `Stock bajo para ${product.name} después de orden. Stock actual: ${product.stock}, Mínimo: ${product.minStock}`
+            });
+            await alert.save();
+            console.log(`Alerta creada para ${product.name}`);
+          }
         }
       }
     }
     
+    // Populate para devolver datos completos
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('userId', 'fullName email');
+    
+    console.log('Orden completada exitosamente:', populatedOrder.orderNumber);
+    res.json(populatedOrder);
+    
+  } catch (error) {
+    console.error('Error al crear orden:', error);
+    res.status(500).json({ error: 'Error interno al crear orden: ' + error.message });
+  }
+});
+
+// Obtener una orden específica
+app.get('/api/orders/:id', authMiddleware, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.productId')
+      .populate('userId', 'fullName email');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    // Verificar que el usuario sea el dueño de la orden o staff
+    const user = await User.findById(req.userId);
+    if (order.userId._id.toString() !== req.userId && user.role !== 'staff') {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear orden' });
+    console.error('Error al obtener orden:', error);
+    res.status(500).json({ error: 'Error al obtener orden' });
   }
 });
 
 // REVIEWS ROUTES
 app.get('/api/reviews/product/:productId', async (req, res) => {
   try {
-    const productReviews = await Review.find({ productId: req.params.productId }).sort({ createdAt: -1 });
+    const productReviews = await Review.find({ productId: req.params.productId })
+      .populate('userId', 'fullName')
+      .sort({ createdAt: -1 });
     res.json(productReviews);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener reseñas' });
@@ -656,10 +895,21 @@ app.post('/api/reviews', authMiddleware, async (req, res) => {
     const { productId, rating, comment } = req.body;
     const review = new Review({ productId, userId: req.userId, rating, comment });
     await review.save();
-    res.json(review);
+    
+    const populatedReview = await Review.findById(review._id).populate('userId', 'fullName');
+    res.json(populatedReview);
   } catch (error) {
     res.status(500).json({ error: 'Error al crear reseña' });
   }
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
 });
 
 app.listen(PORT, () => {

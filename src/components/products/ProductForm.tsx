@@ -1,14 +1,15 @@
+// src/components/dashboard/ProductForm.tsx
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { categories, products } from '../../lib/api';
+import { toast } from 'react-toastify';
 
 interface Category {
   _id: string;
   name: string;
 }
 
-interface Product {
-  _id?: string;
+interface FormData {
   name: string;
   description: string;
   categoryId: string;
@@ -30,31 +31,18 @@ interface ProductFormProps {
 export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
   const [categoryList, setCategoryList] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<Product>(
-    product ? {
-      name: product.name,
-      description: product.description,
-      categoryId: product.categoryId?._id || product.categoryId || '',
-      brand: product.brand,
-      sku: product.sku,
-      price: product.price,
-      cost: product.cost,
-      stock: product.stock,
-      minStock: product.minStock,
-      imageUrl: product.imageUrl,
-    } : {
-      name: '',
-      description: '',
-      categoryId: '',
-      brand: '',
-      sku: '',
-      price: 0,
-      cost: 0,
-      stock: 0,
-      minStock: 5,
-      imageUrl: '',
-    }
-  );
+  const [formData, setFormData] = useState<FormData>({
+    name: product?.name || '',
+    description: product?.description || '',
+    categoryId: product?.categoryId?._id || product?.categoryId || '',
+    brand: product?.brand || '',
+    sku: product?.sku || '',
+    price: product?.price || 0,
+    cost: product?.cost || 0,
+    stock: product?.stock || 0,
+    minStock: product?.minStock || 5,
+    imageUrl: product?.imageUrl || '',
+  });
 
   useEffect(() => {
     loadCategories();
@@ -65,20 +53,34 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
     if (data) setCategoryList(data);
   };
 
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (product?._id) {
-        await products.update(product._id, formData);
+      const action = product?._id
+        ? products.update(product._id, formData)
+        : products.create(formData);
+
+      const { error } = await action;
+
+      if (error) {
+        toast.error(`Error al ${product ? 'actualizar' : 'crear'} el producto`);
       } else {
-        await products.create(formData);
+        toast.success(`Producto ${product ? 'actualizado' : 'creado'} con éxito`);
+        onSave();
+        onClose();
       }
-      onSave();
-      onClose();
     } catch (error) {
       console.error('Error saving product:', error);
+      toast.error('Error inesperado al guardar el producto');
     } finally {
       setLoading(false);
     }
@@ -86,7 +88,7 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-2xl font-bold text-gray-800">
             {product ? 'Editar Producto' : 'Nuevo Producto'}
@@ -99,7 +101,7 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -107,9 +109,10 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="text"
+                name="name"
                 required
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Taladro Eléctrico Bosch"
               />
@@ -120,8 +123,9 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
                 Descripción
               </label>
               <textarea
+                name="description"
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows={3}
                 placeholder="Descripción detallada del producto"
@@ -133,9 +137,10 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
                 Categoría
               </label>
               <select
+                name="categoryId"
                 required
                 value={formData.categoryId}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Seleccionar categoría</option>
@@ -153,9 +158,10 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="text"
+                name="brand"
                 required
                 value={formData.brand}
-                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Bosch, DeWalt, Samsung, etc."
               />
@@ -167,9 +173,10 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="text"
+                name="sku"
                 required
                 value={formData.sku}
-                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="SKU-001"
               />
@@ -181,11 +188,12 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="number"
+                name="price"
                 required
                 step="0.01"
                 min="0"
                 value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="0.00"
               />
@@ -197,11 +205,12 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="number"
+                name="cost"
                 required
                 step="0.01"
                 min="0"
                 value={formData.cost}
-                onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="0.00"
               />
@@ -213,10 +222,11 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="number"
+                name="stock"
                 required
                 min="0"
                 value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="0"
               />
@@ -228,10 +238,11 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="number"
+                name="minStock"
                 required
                 min="0"
                 value={formData.minStock}
-                onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="5"
               />
@@ -243,31 +254,33 @@ export function ProductForm({ product, onClose, onSave }: ProductFormProps) {
               </label>
               <input
                 type="url"
+                name="imageUrl"
                 value={formData.imageUrl}
-                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="https://ejemplo.com/imagen.jpg"
               />
             </div>
           </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
         </form>
+
+        <div className="flex gap-3 p-6 border-t mt-auto bg-gray-50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors font-semibold"
+          >
+            {loading ? 'Guardando...' : 'Guardar Producto'}
+          </button>
+        </div>
       </div>
     </div>
   );

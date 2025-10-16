@@ -1,3 +1,4 @@
+// src/components/dashboard/SalesList.tsx
 import { useState, useEffect } from 'react';
 import { ShoppingCart, Plus } from 'lucide-react';
 import { sales } from '../../lib/api';
@@ -47,6 +48,12 @@ export function SalesList() {
     transfer: 'Transferencia',
   };
 
+  const statusLabels: Record<string, { label: string; className: string }> = {
+    completed: { label: 'Completado', className: 'bg-green-100 text-green-800' },
+    pending: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
+    cancelled: { label: 'Cancelado', className: 'bg-red-100 text-red-800' },
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,7 +63,7 @@ export function SalesList() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all hover:scale-105 shadow-md"
         >
           <Plus className="w-5 h-5" />
           Nueva Venta
@@ -74,27 +81,14 @@ export function SalesList() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Número
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Documento
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Método de Pago
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
+                  {['Número', 'Cliente', 'Documento', 'Método de Pago', 'Total', 'Fecha', 'Estado'].map((header) => (
+                    <th
+                      key={header}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      {header}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -129,8 +123,12 @@ export function SalesList() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        {sale.status === 'completed' ? 'Completado' : sale.status}
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          statusLabels[sale.status]?.className || 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {statusLabels[sale.status]?.label || sale.status}
                       </span>
                     </td>
                   </tr>

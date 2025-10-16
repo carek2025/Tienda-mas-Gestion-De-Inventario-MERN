@@ -1,7 +1,9 @@
+// src/components/dashboard/ProductList.tsx
 import { useState, useEffect } from 'react';
 import { Package, Plus, Edit, Trash2, Search } from 'lucide-react';
 import { products } from '../../lib/api';
 import { ProductForm } from './ProductForm';
+import { toast } from 'react-toastify';
 
 interface Product {
   _id: string;
@@ -39,9 +41,14 @@ export function ProductList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('¿Está seguro de eliminar este producto?')) {
-      await products.delete(id);
-      loadProducts();
+    if (window.confirm('¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer.')) {
+      const { error } = await products.delete(id);
+      if (error) {
+        toast.error('Error al eliminar el producto');
+      } else {
+        toast.success('Producto eliminado con éxito');
+        loadProducts();
+      }
     }
   };
 
@@ -64,7 +71,7 @@ export function ProductList() {
             setSelectedProduct(undefined);
             setShowForm(true);
           }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all hover:scale-105 shadow-md"
         >
           <Plus className="w-5 h-5" />
           Nuevo Producto
@@ -94,7 +101,7 @@ export function ProductList() {
           {filteredProducts.map((product) => (
             <div
               key={product._id}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow flex flex-col"
             >
               <div className="h-48 bg-gray-200 flex items-center justify-center">
                 {product.imageUrl ? (
@@ -107,58 +114,70 @@ export function ProductList() {
                   <Package className="w-16 h-16 text-gray-400" />
                 )}
               </div>
-              <div className="p-4">
+              
+              <div className="p-4 flex flex-col flex-grow">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <h3 className="font-semibold text-gray-800">{product.name}</h3>
+                    <h3 className="font-semibold text-lg text-gray-800">{product.name}</h3>
                     <p className="text-sm text-gray-500">{product.brand}</p>
                   </div>
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                     {product.categoryId?.name || 'Sin categoría'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                  {product.description || 'Sin descripción'}
-                </p>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-xs text-gray-500">SKU: {product.sku}</p>
-                    <p className="text-lg font-bold text-green-600">
-                      S/ {product.price.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Stock</p>
-                    <p
-                      className={`text-lg font-bold ${
-                        product.stock <= product.minStock
-                          ? 'text-red-600'
-                          : 'text-gray-800'
-                      }`}
-                    >
-                      {product.stock}
-                    </p>
+                
+                {product.description && (
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    {product.description}
+                  </p>
+                )}
+
+                <div className="mt-auto pt-4 border-t">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-gray-500">Precio</p>
+                      <p className="text-lg font-bold text-green-600">
+                        S/ {product.price.toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Stock</p>
+                      <p
+                        className={`text-lg font-bold ${
+                          product.stock <= product.minStock
+                            ? 'text-red-600'
+                            : 'text-gray-800'
+                        }`}
+                      >
+                        {product.stock}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">SKU</p>
+                      <p className="text-sm font-mono text-gray-600">{product.sku}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedProduct(product);
-                      setShowForm(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(product._id)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar
-                  </button>
-                </div>
+              </div>
+
+              <div className="p-4 border-t flex gap-2 bg-gray-50">
+                <button
+                  onClick={() => {
+                    setSelectedProduct(product);
+                    setShowForm(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors text-sm font-semibold"
+                >
+                  <Edit className="w-4 h-4" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(product._id)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors text-sm font-semibold"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar
+                </button>
               </div>
             </div>
           ))}
